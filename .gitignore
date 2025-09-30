@@ -21,3 +21,8 @@ build/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Demo output files
+demo_medical_cases.csv
+detailed_schedule.csv
+scheduling_solution.json
