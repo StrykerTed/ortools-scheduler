@@ -25,4 +25,7 @@ Thumbs.db
 # Demo output files
 demo_medical_cases.csv
 detailed_schedule.csv
+platform_summary.csv
+printer_utilization.csv
 scheduling_solution.json
+gantt_chart.png

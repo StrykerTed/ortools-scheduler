@@ -92,8 +92,24 @@ python src/demo_data.py
 
 ## 🏃‍♂️ Quick Start
 
-The scheduler demonstrates optimal allocation of medical cases across 3D printing platforms:
+### Running the Scheduler
 
+**Simple Method:**
+```bash
+# Activate virtual environment (if using)
+source venv/bin/activate
+
+# Run the complete scheduler demo
+python src/scheduler.py
+```
+
+This will automatically:
+1. Load 70 medical cases from `demo_medical_cases.csv`
+2. Optimize scheduling across 5 platforms
+3. Generate all CSV reports
+4. Save JSON solution file
+
+**Programmatic Usage:**
 ```python
 from src.scheduler import PlatformScheduler
 
@@ -101,21 +117,31 @@ from src.scheduler import PlatformScheduler
 scheduler = PlatformScheduler()
 
 # Load medical cases with due dates and priorities
-cases = scheduler.load_medical_cases('demo_medical_cases.csv')
+cases = scheduler.load_cases_from_csv('demo_medical_cases.csv')
 
 # Optimize platform assignments and schedules
-solution = scheduler.solve(cases)
+solution = scheduler.schedule_platforms(cases, time_limit=60)
 
-# Display results and export schedules
-scheduler.display_solution(solution)
-scheduler.export_to_csv(solution, 'optimized_schedule.csv')
+# Export all CSV reports at once
+scheduler.export_all_reports(solution)
+
+# Or export individual reports
+scheduler.export_detailed_schedule(solution, "detailed_schedule.csv")
+scheduler.export_platform_summary(solution, "platform_summary.csv")
+scheduler.export_printer_utilization(solution, "printer_utilization.csv")
+```
+
+### Generating Gantt Chart PNG
+```bash
+# After running the scheduler, generate the visualization
+python create_gantt_png.py
 ```
 
 **Demo Results:**
    - 70 medical cases scheduled across 5 platforms
-   - 98.6% on-time delivery rate
-   - 0.01 second solve time
-   - Full Gantt chart visualization
+   - 97.1% on-time delivery rate (68/70 cases)
+   - 0.01-0.02 second solve time
+   - Multiple CSV reports and visualizations generated
 
 ## 🔧 Technical Details
 
@@ -147,12 +173,75 @@ The scheduler uses **Google OR-Tools CP-SAT solver** to optimize:
 
 ## 📊 Output Files
 
-The scheduler generates several output files for production planning:
+The scheduler generates comprehensive output files for production planning and analysis:
 
-- `scheduling_solution.json` - Complete solution with platform assignments
-- `detailed_schedule.csv` - Case-by-case scheduling analysis
-- `gantt_chart.png` - Visual timeline of platform utilization
-- `demo_medical_cases.csv` - Generated medical case data for testing
+### Scheduling Solution
+- **`scheduling_solution.json`** - Complete optimization solution with platform assignments, timing, and full case details
+
+### CSV Reports (automatically generated)
+
+#### 1. **`detailed_schedule.csv`** - Case-by-Case Schedule
+Complete schedule for every medical case with:
+- Case ID, patient name, device type, priority level
+- Surgery date and due date
+- Assigned platform and printer
+- Print start/complete times
+- Shipping days required
+- Days buffer before surgery and due date
+- Delivery status (ON_TIME/LATE)
+- Risk level (HIGH/MEDIUM/LOW)
+
+**Use Cases:** Production tracking, delivery verification, risk management
+
+#### 2. **`platform_summary.csv`** - Platform Utilization Report
+Summary of each 3D printing platform with:
+- Platform ID and assigned printer
+- Start and end times
+- Duration and total cases
+- Emergency/urgent/standard case counts
+- Unique device types and mix
+- Platform efficiency metrics
+
+**Use Cases:** Resource planning, capacity analysis, workload balancing
+
+#### 3. **`printer_utilization.csv`** - Printer Status Report
+Status of all 50 printers showing:
+- Printer ID and status (ACTIVE/IDLE)
+- Assigned platform (if active)
+- Operating times and utilization hours
+- Total cases handled
+- Capacity availability
+
+**Use Cases:** Asset management, capacity forecasting, maintenance scheduling
+
+### CSV Report Examples
+
+**Sample from detailed_schedule.csv:**
+```csv
+case_id,patient_name,device_type,priority,surgery_date,due_date,assigned_platform,assigned_printer,print_start_time,print_complete_time,days_buffer_before_due_date,delivery_status,risk_level
+ORB015,Nancy Jackson,orbital_implant,emergency,2025-11-17,2025-11-14,Platform_0,Printer_49,2025-10-03 13:10,2025-10-04 05:10,41,ON_TIME,LOW
+JAW009,Elizabeth Clark,jaw_reconstruction,urgent,2025-10-10,2025-10-03,Platform_0,Printer_49,2025-10-03 13:10,2025-10-04 05:10,-1,LATE,HIGH
+```
+
+**Sample from platform_summary.csv:**
+```csv
+platform_id,assigned_printer,start_time,end_time,total_cases,emergency_cases,urgent_cases,standard_cases,device_mix
+Platform_0,Printer_49,2025-10-03 13:10,2025-10-04 05:10,14,2,12,0,"orbital_implant(2), jaw_reconstruction(2), knee_component(4)..."
+Platform_1,Printer_47,2025-10-03 13:10,2025-10-04 05:10,14,0,1,13,"custom_prosthetic(3), orbital_implant(2)..."
+```
+
+**Sample from printer_utilization.csv:**
+```csv
+printer_id,status,assigned_platform,start_time,end_time,total_cases,utilization_hours
+Printer_45,ACTIVE,Platform_3,2025-10-03 13:10,2025-10-04 05:10,14,16
+Printer_0,IDLE,None,N/A,N/A,0,0
+```
+
+### Visualization
+- **`gantt_chart.png`** - High-resolution timeline visualization with color-coded priorities
+
+### Demo Data
+- **`demo_medical_cases.csv`** - Generated medical case data for testing (70 cases with realistic parameters)
 
 ## 🎨 Visualization
 
@@ -278,6 +367,42 @@ scheduler = PlatformScheduler(
 - **Multi-objective**: Balance cost, quality, and delivery performance
 - **Robust Optimization**: Account for equipment failures and delays
 - **Continuous Improvement**: Adaptive algorithms based on historical performance
+
+---
+
+## 📝 Quick Reference
+
+### Running the Complete Workflow
+
+```bash
+# 1. Activate virtual environment
+source venv/bin/activate
+
+# 2. Run scheduler (generates all CSVs automatically)
+python src/scheduler.py
+
+# 3. Generate Gantt chart PNG
+python create_gantt_png.py
+```
+
+### Generated Files Summary
+
+| File | Size | Description |
+|------|------|-------------|
+| `detailed_schedule.csv` | ~10KB | 70 cases with complete scheduling details, delivery status, risk levels |
+| `platform_summary.csv` | ~1.2KB | 5 platforms with utilization metrics and device mix |
+| `printer_utilization.csv` | ~1.9KB | All 50 printers showing active/idle status |
+| `scheduling_solution.json` | ~32KB | Complete optimization solution with all data |
+| `gantt_chart.png` | ~276KB | High-resolution visual timeline with color-coded priorities |
+| `demo_medical_cases.csv` | ~8.1KB | Input data: 70 medical cases with surgery dates |
+
+### Key Metrics from Demo Run
+
+- **Cases Scheduled**: 70 medical devices across 5 platforms
+- **On-Time Delivery**: 97.1% (68 out of 70 cases)
+- **Solve Time**: 0.01-0.02 seconds (ultra-fast optimization)
+- **Printer Utilization**: 10% (5 of 50 printers used)
+- **Platform Efficiency**: 14 cases per platform (maximum capacity)
 
 ---
 

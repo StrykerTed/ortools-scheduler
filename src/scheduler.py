@@ -464,7 +464,7 @@ class PlatformScheduler:
     
     def export_detailed_schedule(self, solution: Optional[Dict[str, Any]] = None, 
                                 filename: str = "detailed_schedule.csv"):
-        """Export detailed schedule to CSV for external analysis."""
+        """Export detailed case-by-case schedule to CSV."""
         if solution is None:
             solution = self.solution
         
@@ -472,7 +472,7 @@ class PlatformScheduler:
             print("No solution available to export.")
             return
         
-        # Flatten all case data with schedule information
+        # Flatten all case data with comprehensive schedule information
         detailed_data = []
         
         for platform in solution['platform_assignments']:
@@ -480,24 +480,45 @@ class PlatformScheduler:
             platform_end = datetime.strptime(platform['end_time'], "%Y-%m-%d %H:%M")
             
             for case in platform['cases']:
+                # Handle datetime objects or strings
+                surgery_date_str = case['surgery_date']
+                due_date_str = case['due_date']
+                
+                if isinstance(surgery_date_str, datetime):
+                    surgery_date = surgery_date_str
+                    surgery_date_display = surgery_date.strftime("%Y-%m-%d")
+                else:
+                    surgery_date = datetime.strptime(str(surgery_date_str).split()[0], "%Y-%m-%d")
+                    surgery_date_display = str(surgery_date_str).split()[0]
+                
+                if isinstance(due_date_str, datetime):
+                    due_date = due_date_str
+                    due_date_display = due_date.strftime("%Y-%m-%d")
+                else:
+                    due_date = datetime.strptime(str(due_date_str).split()[0], "%Y-%m-%d")
+                    due_date_display = str(due_date_str).split()[0]
+                
+                days_before_surgery = (surgery_date - platform_end).days
+                days_before_due = (due_date.date() - platform_end.date()).days
+                on_time = due_date.date() >= platform_end.date()
+                
                 case_detail = {
                     'case_id': case['case_id'],
                     'patient_name': case['patient_name'],
                     'device_type': case['device_type'],
                     'priority': case['priority'],
-                    'surgery_date': case['surgery_date'],
-                    'due_date': case['due_date'], 
-                    'shipping_days': case['shipping_days'],
-                    'platform_id': platform['platform_id'],
-                    'assigned_printer': platform['assigned_printer'],
-                    'platform_start': platform['start_time'],
-                    'platform_end': platform['end_time'],
-                    'production_days_before_surgery': (
-                        datetime.strptime(str(case['surgery_date']).split()[0], "%Y-%m-%d") - platform_end
-                    ).days,
-                    'on_time_delivery': (
-                        datetime.strptime(str(case['due_date']).split()[0], "%Y-%m-%d").date() >= platform_end.date()
-                    )
+                    'surgery_date': surgery_date_display,
+                    'due_date': due_date_display,
+                    'assigned_platform': f"Platform_{platform['platform_id']}",
+                    'assigned_printer': f"Printer_{platform['assigned_printer']}",
+                    'print_start_time': platform['start_time'],
+                    'print_complete_time': platform['end_time'],
+                    'platform_duration_hours': platform['duration_hours'],
+                    'shipping_days_required': case['shipping_days'],
+                    'days_buffer_before_surgery': days_before_surgery,
+                    'days_buffer_before_due_date': days_before_due,
+                    'delivery_status': 'ON_TIME' if on_time else 'LATE',
+                    'risk_level': 'HIGH' if days_before_due < 5 else 'MEDIUM' if days_before_due < 10 else 'LOW'
                 }
                 detailed_data.append(case_detail)
         
@@ -505,16 +526,132 @@ class PlatformScheduler:
         df = pd.DataFrame(detailed_data)
         df.to_csv(filename, index=False)
         
-        print(f"\n📊 Detailed schedule exported to {filename}")
-        print(f"   - {len(detailed_data)} cases with schedule details")
+        print(f"\n📊 Detailed case schedule exported to {filename}")
+        print(f"   - {len(detailed_data)} cases with complete schedule details")
         
         # Quick analysis
-        on_time_count = sum(1 for case in detailed_data if case['on_time_delivery'])
+        on_time_count = sum(1 for case in detailed_data if case['delivery_status'] == 'ON_TIME')
         on_time_rate = (on_time_count / len(detailed_data)) * 100
         
         print(f"   - On-time delivery rate: {on_time_rate:.1f}% ({on_time_count}/{len(detailed_data)})")
         
         return df
+    
+    def export_platform_summary(self, solution: Optional[Dict[str, Any]] = None,
+                               filename: str = "platform_summary.csv"):
+        """Export platform-level summary to CSV."""
+        if solution is None:
+            solution = self.solution
+        
+        if not solution:
+            print("No solution available to export.")
+            return
+        
+        platform_data = []
+        
+        for platform in solution['platform_assignments']:
+            # Count priority levels
+            priority_counts = {'emergency': 0, 'urgent': 0, 'standard': 0}
+            device_types = {}
+            
+            for case in platform['cases']:
+                priority_counts[case['priority']] = priority_counts.get(case['priority'], 0) + 1
+                device_type = case['device_type']
+                device_types[device_type] = device_types.get(device_type, 0) + 1
+            
+            platform_summary = {
+                'platform_id': f"Platform_{platform['platform_id']}",
+                'assigned_printer': f"Printer_{platform['assigned_printer']}",
+                'start_time': platform['start_time'],
+                'end_time': platform['end_time'],
+                'duration_hours': platform['duration_hours'],
+                'total_cases': platform['num_cases'],
+                'emergency_cases': priority_counts.get('emergency', 0),
+                'urgent_cases': priority_counts.get('urgent', 0),
+                'standard_cases': priority_counts.get('standard', 0),
+                'unique_device_types': len(device_types),
+                'device_mix': ', '.join([f"{k}({v})" for k, v in device_types.items()])
+            }
+            platform_data.append(platform_summary)
+        
+        df = pd.DataFrame(platform_data)
+        df.to_csv(filename, index=False)
+        
+        print(f"� Platform summary exported to {filename}")
+        print(f"   - {len(platform_data)} platforms with utilization details")
+        
+        return df
+    
+    def export_printer_utilization(self, solution: Optional[Dict[str, Any]] = None,
+                                  filename: str = "printer_utilization.csv"):
+        """Export printer utilization report to CSV."""
+        if solution is None:
+            solution = self.solution
+        
+        if not solution:
+            print("No solution available to export.")
+            return
+        
+        # Track which printers are used
+        used_printers = set()
+        printer_details = []
+        
+        for platform in solution['platform_assignments']:
+            printer_id = platform['assigned_printer']
+            used_printers.add(printer_id)
+            
+            printer_details.append({
+                'printer_id': f"Printer_{printer_id}",
+                'status': 'ACTIVE',
+                'assigned_platform': f"Platform_{platform['platform_id']}",
+                'start_time': platform['start_time'],
+                'end_time': platform['end_time'],
+                'total_cases': platform['num_cases'],
+                'utilization_hours': platform['duration_hours']
+            })
+        
+        # Add idle printers
+        total_printers = self.config['total_printers']
+        for printer_id in range(total_printers):
+            if printer_id not in used_printers:
+                printer_details.append({
+                    'printer_id': f"Printer_{printer_id}",
+                    'status': 'IDLE',
+                    'assigned_platform': 'None',
+                    'start_time': 'N/A',
+                    'end_time': 'N/A',
+                    'total_cases': 0,
+                    'utilization_hours': 0
+                })
+        
+        df = pd.DataFrame(printer_details)
+        df = df.sort_values('printer_id')
+        df.to_csv(filename, index=False)
+        
+        print(f"🖨️  Printer utilization exported to {filename}")
+        print(f"   - {len(used_printers)} active printers, {total_printers - len(used_printers)} idle")
+        
+        return df
+    
+    def export_all_reports(self, solution: Optional[Dict[str, Any]] = None):
+        """Export all CSV reports at once."""
+        if solution is None:
+            solution = self.solution
+        
+        print("\n" + "="*80)
+        print("📊 EXPORTING ALL REPORTS")
+        print("="*80)
+        
+        self.export_detailed_schedule(solution, "detailed_schedule.csv")
+        self.export_platform_summary(solution, "platform_summary.csv")
+        self.export_printer_utilization(solution, "printer_utilization.csv")
+        
+        print("\n✅ All reports exported successfully!")
+        print("   📁 Files created:")
+        print("      - detailed_schedule.csv (case-by-case schedule)")
+        print("      - platform_summary.csv (platform utilization)")
+        print("      - printer_utilization.csv (printer status)")
+        print("="*80)
 
 def main():
     """Demo script showing the platform scheduler in action."""
@@ -541,8 +678,8 @@ def main():
         # Show Gantt chart
         scheduler.display_gantt_chart(solution)
         
-        # Export detailed analysis
-        scheduler.export_detailed_schedule(solution, "detailed_schedule.csv")
+        # Export all CSV reports
+        scheduler.export_all_reports(solution)
         
         # Save solution to file
         with open("scheduling_solution.json", "w") as f:
